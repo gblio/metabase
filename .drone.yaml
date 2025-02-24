@@ -1,0 +1,90 @@
+---
+kind: pipeline
+type: kubernetes
+name: default
+
+trigger:
+  branch:
+    exclude:
+    - "*-promotion"
+  event:
+  - push
+
+steps:
+- name: getting_metadata
+  image: gcr.io/disco-order-206218/drone-metadata:3.0
+  pull: always
+  settings:
+    chart_name: "metabase"
+    elastic_credentials:
+      from_secret: elastic-token
+
+- name: publish_chart
+  image: gcr.io/disco-order-206218/drone-helm:3.1.11
+  pull: always
+  settings:
+    elastic_credentials:
+      from_secret: elastic-token
+    repository_credentials:
+      from_secret: nexus-token
+    github_token:
+      from_secret: github-token
+    gcr_service_account_credentials:
+      from_secret: gcr-serviceaccount
+      
+- name: tagging_release
+  image: gcr.io/disco-order-206218/drone-tag:3.0
+  pull: always
+  when:
+    branch:
+    - master
+
+image_pull_secrets:
+- gcr-dockerconfig
+
+---
+kind: pipeline
+type: kubernetes
+name: notify
+
+trigger:
+  branch:
+    exclude:
+    - "*-promotion"
+  status:
+  - success
+  - failure
+  event:
+  - push
+
+depends_on:
+- default
+
+clone:
+  disable: true
+
+steps:
+- name: slack_notification
+  image: plugins/slack
+  settings:
+    webhook:
+      from_secret: ph-slack-webhook
+    channel: ph-pipelines
+    link_names: true
+    template: >
+      {{#success build.status}}
+        *Build ${DRONE_BUILD_NUMBER} succeeded and artifacts published!*  :green-check-mark:
+        *Event:* ${DRONE_BUILD_EVENT}
+        *Repository:* ${DRONE_REPO}
+        *Branch:* ${DRONE_COMMIT_BRANCH}
+        *Git SHA:* ${DRONE_COMMIT_SHA}
+        *Link:* {{build.link}}
+      {{else}}
+        *Build {{build.number}} failed and artifacts not published!*  :red-x-mark:
+        *Event:* ${DRONE_BUILD_EVENT}
+        *Repository:* ${DRONE_REPO}
+        *Branch:* ${DRONE_COMMIT_BRANCH}
+        *Git SHA:* ${DRONE_COMMIT_SHA}
+        *Link:* {{build.link}}
+      {{/success}}
+      

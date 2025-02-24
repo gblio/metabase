@@ -1,0 +1,143 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ template "metabase.fullname" . }}
+  labels:
+    app: {{ template "metabase.name" . }}
+    chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+    product: {{ .Values.product }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ template "metabase.name" . }}
+      release: {{ .Release.Name }}
+      product: {{ .Values.product }}
+  template:
+    metadata:
+      labels:
+        app: {{ template "metabase.name" . }}
+        release: {{ .Release.Name }}
+        product: {{ .Values.product }}
+    spec:
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+          - name: MB_JETTY_HOST
+            value: {{ .Values.listen.host | quote }}
+          - name: MB_JETTY_PORT
+            value: {{ .Values.listen.port | quote }}
+          {{- if .Values.ssl.enabled }}
+          - name: MB_JETTY_SSL
+            value: true
+          - name: MB_JETTY_SSL_Port
+            value: {{ .Values.ssl.port | quote }}
+          - name: MB_JETTY_SSL_Keystore
+            valueFrom:
+              secretKeyRef:
+                name: {{ template "metabase.fullname" . }}-ssl
+                key: keystore
+          - name: MB_JETTY_SSL_Keystore_Password
+            valueFrom:
+              secretKeyRef:
+                name: {{ template "metabase.fullname" . }}-ssl
+                key: password
+          {{- end }}
+          - name: MB_DB_TYPE
+            value: {{ .Values.database.type | lower }}
+          {{- if .Values.database.encryptionKey }}
+          - name: MB_ENCRYPTION_SECRET_KEY
+            valueFrom:
+              secretKeyRef:
+                name: {{ template "metabase.fullname" . }}-database
+                key: encryptionKey
+          {{- end }}
+          {{- if ne (.Values.database.type | lower) "h2" }}
+            {{- if .Values.database.connectionURI }}
+          - name: MB_DB_CONNECTION_URI
+            valueFrom:
+              secretKeyRef:
+                name: {{ template "metabase.fullname" . }}-database
+                key: connectionURI
+            {{- else }}
+          - name: MB_DB_HOST
+            value: {{ .Values.database.host | quote }}
+          - name: MB_DB_PORT
+            value: {{ .Values.database.port | quote }}
+          - name: MB_DB_DBNAME
+            value: {{ .Values.database.dbname | quote }}
+          - name: MB_DB_USER
+            valueFrom:
+              secretKeyRef:
+                name: {{ .Values.postgresql.postgresqlSecret }}
+                key: username
+          - name: MB_DB_PASS
+            valueFrom:
+              secretKeyRef:
+                name: {{ .Values.postgresql.postgresqlSecret }}
+                key: password
+            {{- end }}
+          {{- end }}
+          - name: MB_PASSWORD_COMPLEXITY
+            value: {{ .Values.password.complexity }}
+          - name: MB_PASSWORD_LENGTH
+            value: {{ .Values.password.length | quote }}
+          - name: JAVA_TIMEZONE
+            value: {{ .Values.timeZone }}
+                  {{- $javaToolOptions := "" }}
+                  {{- $javaStartingHeap := "" }}
+                  {{- $javaMaximumHeap := "" }}
+                  {{- if .Values.javaToolOptions }}
+                  {{- $javaToolOptions = .Values.javaToolOptions }}
+                  {{- end }}
+                  {{- if .Values.javaStartingHeap }}
+                  {{- $javaStartingHeap = (printf "-Xms%s" .Values.javaStartingHeap) }}
+                  {{- end }}
+                  {{- if .Values.javaMaximumHeap }}
+                  {{- $javaMaximumHeap = (printf "-Xmx%s" .Values.javaMaximumHeap) }}
+                  {{- end }}
+          {{- if or .Values.javaToolOptions .Values.javaStartingHeap .Values.javaMaximumHeap }}
+          - name: JAVA_TOOL_OPTIONS
+            value: {{ cat $javaToolOptions $javaStartingHeap $javaMaximumHeap | trim | quote }}
+          {{- end }}
+          {{- if .Values.pluginsDirectory }}
+          - name: MB_PLUGINS_DIR
+            value: {{ .Values.pluginsDirectory | quote }}
+          {{- end }}
+          - name: MB_EMOJI_IN_LOGS
+            value: {{ .Values.emojiLogging | quote }}
+          ports:
+            - containerPort: {{ .Values.service.internalPort }}
+          livenessProbe:
+            httpGet:
+              path: /
+              port: {{ .Values.service.internalPort }}
+            initialDelaySeconds: 120
+            timeoutSeconds: 5
+            failureThreshold: 6
+          readinessProbe:
+            httpGet:
+              path: /
+              port: {{ .Values.service.internalPort }}
+            initialDelaySeconds: 30
+            timeoutSeconds: 3
+            periodSeconds: 5
+          resources:
+{{ toYaml .Values.resources | indent 12 }}
+    {{- if .Values.nodeSelector }}
+      nodeSelector:
+{{ toYaml .Values.nodeSelector | indent 8 }}
+    {{- end }}
+{{- if .Values.tolerations }}
+      tolerations:
+{{ toYaml .Values.tolerations | indent 8 }}
+{{- end }}
+{{- if .Values.affinity }}
+      affinity:
+{{ toYaml .Values.affinity | indent 8 }}
+{{- end }}
+

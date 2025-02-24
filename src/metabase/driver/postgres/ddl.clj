@@ -28,7 +28,7 @@
                               first
                               :setting
                               parse-long)
-        ten-minutes      (.toMillis (t/minutes 10))
+        ten-minutes      (.toMillis (t/minutes 60))
         new-timeout      (if (zero? existing-timeout)
                            ten-minutes
                            (min ten-minutes existing-timeout))]
