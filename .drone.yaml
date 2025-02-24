@@ -28,7 +28,7 @@ steps:
       from_secret: gcr-serviceaccount
 
 - name: publish_chart
-  image: gcr.io/disco-order-206218/drone-helm:3.1.11
+  image: gcr.io/disco-order-206218/drone-helm:3.1
   pull: always
   settings:
     elastic_credentials:
