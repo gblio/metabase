@@ -110,6 +110,8 @@ spec:
           {{- end }}
           - name: MB_EMOJI_IN_LOGS
             value: {{ .Values.emojiLogging | quote }}
+          - name: MB_SITE_URL
+            value: {{ .Values.siteUrl | quote }}
           ports:
             - containerPort: {{ .Values.service.internalPort }}
           livenessProbe:
