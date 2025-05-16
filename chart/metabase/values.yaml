@@ -6,6 +6,8 @@ replicaCount: 1
 
 product: phantom
 
+siteUrl: metabase.maverickgames.com
+
 image:
   repository: metabase/metabase
   tag: v0.41.5
